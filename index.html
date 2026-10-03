@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>LIA Website Forge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #060814; font-family: sans-serif; }
+    #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+    #result-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 1; display: none; }
+  </style>
+</head>
+<body class="text-white">
+
+  <div id="canvas-container"></div>
+  <iframe id="result-frame"></iframe>
+
+  <!-- UI Overlay -->
+  <div id="ui-layer" class="absolute inset-0 z-20 flex flex-col justify-between p-6 pointer-events-none">
+    <div class="text-center pt-8">
+      <h1 class="text-2xl font-bold tracking-wider text-cyan-400">LIA FORGE 3D</h1>
+      <p id="stage-text" class="text-sm text-gray-400 mt-1">तैयार है • अपना प्रॉम्प्ट दें</p>
+    </div>
+
+    <div class="w-full max-w-md mx-auto pointer-events-auto space-y-3 pb-6">
+      <div id="api-box" class="bg-gray-900/80 backdrop-blur p-3 rounded-xl border border-gray-700">
+        <input id="api-key" type="password" placeholder="Gemini API Key यहाँ डालें" class="w-full bg-transparent text-sm text-white outline-none px-2 py-1">
+      </div>
+
+      <div class="flex gap-2 bg-gray-900/90 backdrop-blur p-2 rounded-2xl border border-cyan-500/40 shadow-lg shadow-cyan-500/10">
+        <input id="prompt-input" type="text" placeholder="जैसे: ek cafe ki animated website bana do" class="w-full bg-transparent text-sm text-white outline-none px-3">
+        <button id="build-btn" onclick="startForge()" class="bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-sm px-5 py-2.5 rounded-xl transition">Build</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let scene, camera, renderer, coreOrb;
+    const container = document.getElementById('canvas-container');
+
+    function init3D() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.z = 6;
+
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      const geom = new THREE.SphereGeometry(1.2, 32, 32);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x00e5ff, wireframe: true, emissive: 0x0091ea });
+      coreOrb = new THREE.Mesh(geom, mat);
+      scene.add(coreOrb);
+
+      const light = new THREE.PointLight(0xffffff, 1.5);
+      light.position.set(5, 5, 5);
+      scene.add(light);
+
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if(coreOrb) {
+        coreOrb.rotation.y += 0.01;
+        coreOrb.rotation.x += 0.005;
+      }
+      renderer.render(scene, camera);
+    }
+    init3D();
+
+    async function startForge() {
+      const key = document.getElementById('api-key').value.trim();
+      const prompt = document.getElementById('prompt-input').value.trim();
+      const stageText = document.getElementById('stage-text');
+
+      if (!key) { alert('कृपया पहले अपनी Gemini API Key डालें!'); return; }
+      if (!prompt) { alert('कृपया वेबसाइट का विवरण (प्रॉम्प्ट) लिखें!'); return; }
+
+      stageText.innerText = "होलोग्राफिक कोर शुरू हो रहा है...";
+      coreOrb.scale.set(1.5, 1.5, 1.5);
+
+      const sysPrompt = "You are an elite web developer. Build a complete single-file HTML website with Tailwind CDN and GSAP animation based on the user prompt. Return ONLY raw HTML starting with <!DOCTYPE html>.";
+
+      try {
+        stageText.innerText = "Gemini AI वेबसाइट कोड लिख रहा है...";
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `${sysPrompt}\n\nUSER PROMPT: ${prompt}` }] }]
+          })
+        });
+
+        const data = await res.json();
+        let html = data.candidates[0].content.parts[0].text;
+        html = html.replace(/```html/g, '').replace(/```/g, '').trim();
+
+        stageText.innerText = "वेबसाइट तैयार है!";
+        const frame = document.getElementById('result-frame');
+        frame.srcdoc = html;
+        frame.style.display = 'block';
+        document.getElementById('canvas-container').style.display = 'none';
+        document.getElementById('api-box').style.display = 'none';
+      } catch (e) {
+        alert("त्रुटि: " + e.message);
+        stageText.innerText = "बिल्ड फ़ेल हो गया।";
+      }
+    }
+  </script>
+</body>
+</html>
