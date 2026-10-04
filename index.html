@@ -37,7 +37,7 @@
   <main class="relative z-20 flex-1 flex flex-col justify-center items-center px-6 text-center pointer-events-none">
     <div class="bg-black/60 backdrop-blur-md border border-pink-500/40 px-6 py-4 rounded-3xl max-w-sm shadow-2xl">
       <p id="lia-speech" class="text-sm text-pink-200 font-medium leading-relaxed">
-        "नमस्ते! जब भी कुछ काम हो, बस बोलिए 'लिया...' और अपना काम बताइए (जैसे: व्हाट्सएप खोलो, या वेबसाइट बनाओ) ❤️"
+        "नमस्ते! जब भी काम हो, बोलिए 'लिया...' (जैसे: व्हाट्सएप खोलो, या वेबसाइट बनाओ) ❤️"
       </p>
     </div>
   </main>
@@ -63,7 +63,7 @@
   <div id="key-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-center justify-center p-5 hidden">
     <div class="bg-gray-900 border border-pink-500/40 p-6 rounded-3xl w-full max-w-xs space-y-4">
       <h3 class="text-base font-bold text-pink-400">Gemini API Key</h3>
-      <p class="text-xs text-gray-400">Google AI Studio से कॉपी की गई API Key यहाँ डालें:</p>
+      <p class="text-xs text-gray-400">aistudio.google.com से कॉपी की गई नई API Key यहाँ डालें:</p>
       <input id="api-key-input" type="password" placeholder="AIzaSy..." class="w-full bg-black/50 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink-500">
       <div class="flex gap-2">
         <button onclick="saveApiKey()" class="flex-1 bg-pink-500 text-white text-xs font-semibold py-2 rounded-xl">Save</button>
@@ -73,7 +73,6 @@
   </div>
 
   <script>
-    // 3D Visual Hologram Orb
     let scene, camera, renderer, liaOrb;
     function init3D() {
       const container = document.getElementById('canvas-container');
@@ -124,7 +123,6 @@
       }
     }
 
-    // Voice Engine (TTS)
     function speakText(text) {
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
@@ -146,7 +144,6 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    // Speech Recognition
     let recognition;
     let isListening = false;
 
@@ -171,11 +168,10 @@
         document.getElementById('user-said').innerText = `सुना: "${transcript}"`;
 
         const lower = transcript.toLowerCase();
-        // वेक वर्ड: "लिया", "lia", "रिया", "भैया" (अक्सर उच्चारण में आ जाता है)
         if (lower.includes('लिया') || lower.includes('lia') || lower.includes('रिया') || lower.includes('भैया')) {
           sendToLia(transcript);
         } else {
-          document.getElementById('lia-speech').innerText = "पहले 'लिया' बोलिए जानू, तभी मैं सुनूँगी ❤️";
+          document.getElementById('lia-speech').innerText = "पहले 'लिया' बोलिए जानू, तभी मैं काम करूँगी ❤️";
         }
       };
 
@@ -202,7 +198,6 @@
       }
     }
 
-    // App Opener
     function handleAppAction(actionStr) {
       const act = actionStr.toLowerCase();
       if (act.includes('whatsapp')) {
@@ -216,7 +211,6 @@
       }
     }
 
-    // Conversation Engine
     let conversationHistory = [
       {
         role: "user",
@@ -228,50 +222,46 @@
       }
     ];
 
-    // Auto Model Resolution (आपके अकाउंट का सही वर्किंग मॉडल ढूँढने का फ़ंक्शन)
-    let activeModelName = null;
+    async function callGemini(contents) {
+      const apiKey = getApiKey();
+      
+      // पहले सीधा Active मॉडल ट्राय करो
+      const modernModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+      for (const m of modernModels) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: contents })
+          });
+          const data = await res.json();
+          if (data.candidates && data.candidates[0].content) {
+            return data.candidates[0].content.parts[0].text;
+          }
+        } catch(e) {}
+      }
 
-    async function resolveWorkingModel(apiKey) {
-      if (activeModelName) return activeModelName;
+      // अगर फिर भी न मिले तो सीधे आपके अकाउंट की मॉडल लिस्ट से ढूँढो
       try {
         const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         const listData = await listRes.json();
-        if (listData.models && Array.isArray(listData.models)) {
-          const supported = listData.models.find(m => 
-            m.supportedGenerationMethods && 
-            m.supportedGenerationMethods.includes("generateContent") &&
-            (m.name.includes("flash") || m.name.includes("pro"))
-          );
-          if (supported) {
-            activeModelName = supported.name;
-            return activeModelName;
+        if (listData.models && listData.models.length > 0) {
+          const valid = listData.models.find(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"));
+          if (valid) {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${valid.name}:generateContent?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: contents })
+            });
+            const data = await res.json();
+            if (data.candidates && data.candidates[0].content) {
+              return data.candidates[0].content.parts[0].text;
+            }
           }
         }
-      } catch (e) {
-        console.warn("ListModels fallback:", e);
-      }
-      activeModelName = "models/gemini-2.5-flash";
-      return activeModelName;
-    }
+      } catch(e) {}
 
-    async function callGemini(contents) {
-      const apiKey = getApiKey();
-      const model = await resolveWorkingModel(apiKey);
-      const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: contents })
-      });
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-      if (data.candidates && data.candidates[0].content) {
-        return data.candidates[0].content.parts[0].text;
-      }
-      throw new Error("कोई जवाब नहीं मिला");
+      throw new Error("कृपया aistudio.google.com/apikey से नई Key बनाकर डालें।");
     }
 
     async function sendToLia(userMessage) {
@@ -298,7 +288,7 @@
         }
       } catch (err) {
         document.getElementById('lia-speech').innerText = "त्रुटि: " + err.message;
-        speakText("API में कुछ दिक्कत है जानू, कृपया चेक करिए।");
+        speakText("API में दिक्कत है जानू, कृपया नई Key डालें।");
       }
     }
 
@@ -306,7 +296,7 @@
       document.getElementById('lia-status').innerText = "🛠️ LIA वेबसाइट बना रही है...";
       if (liaOrb) liaOrb.material.color.setHex(0x00ff88);
 
-      const sysCodePrompt = `Build a complete single-file HTML website with Tailwind CDN & GSAP animations for: "${prompt}". Return ONLY valid HTML starting with <!DOCTYPE html>. Use real picsum.photos images.`;
+      const sysCodePrompt = `Build a complete single-file animated HTML website with Tailwind CDN & GSAP for: "${prompt}". Return ONLY valid HTML starting with <!DOCTYPE html>.`;
       try {
         const html = await callGemini([{ parts: [{ text: sysCodePrompt }] }]);
         const clean = html.replace(/```html/g, '').replace(/```/g, '').trim();
@@ -334,7 +324,6 @@
       const k = document.getElementById('api-key-input').value.trim();
       if (k) {
         localStorage.setItem('lia_gemini_key', k);
-        activeModelName = null; // Reset cached model
         toggleKeyModal();
         alert("API Key सेव हो गई!");
         toggleListening();
