@@ -56,14 +56,14 @@
         ✕ बंद करें
       </button>
     </div>
-    <span class="text-[11px] text-gray-400">कमांड से पहले "लिया" लगाना ज़रूरी है</span>
+    <span class="text-[11px] text-gray-400">कमांड से पहले "लिया" बोलना ज़रूरी है</span>
   </footer>
 
   <!-- API Key Modal -->
   <div id="key-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-center justify-center p-5 hidden">
     <div class="bg-gray-900 border border-pink-500/40 p-6 rounded-3xl w-full max-w-xs space-y-4">
       <h3 class="text-base font-bold text-pink-400">Gemini API Key</h3>
-      <p class="text-xs text-gray-400">अपनी Google AI Studio Key यहाँ डालें:</p>
+      <p class="text-xs text-gray-400">Google AI Studio से कॉपी की गई API Key यहाँ डालें:</p>
       <input id="api-key-input" type="password" placeholder="AIzaSy..." class="w-full bg-black/50 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-pink-500">
       <div class="flex gap-2">
         <button onclick="saveApiKey()" class="flex-1 bg-pink-500 text-white text-xs font-semibold py-2 rounded-xl">Save</button>
@@ -146,7 +146,7 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    // Smart Speech Recognition with Strict Wake Word
+    // Speech Recognition
     let recognition;
     let isListening = false;
 
@@ -171,11 +171,11 @@
         document.getElementById('user-said').innerText = `सुना: "${transcript}"`;
 
         const lower = transcript.toLowerCase();
-        // सख्त वेक वर्ड चेक: "लिया", "lia", या "रिया"
-        if (lower.includes('लिया') || lower.includes('lia') || lower.includes('रिया')) {
+        // वेक वर्ड: "लिया", "lia", "रिया", "भैया" (अक्सर उच्चारण में आ जाता है)
+        if (lower.includes('लिया') || lower.includes('lia') || lower.includes('रिया') || lower.includes('भैया')) {
           sendToLia(transcript);
         } else {
-          document.getElementById('lia-speech').innerText = "पहले 'लिया' बोलकर आदेश दीजिए जानू ❤️";
+          document.getElementById('lia-speech').innerText = "पहले 'लिया' बोलिए जानू, तभी मैं सुनूँगी ❤️";
         }
       };
 
@@ -202,7 +202,7 @@
       }
     }
 
-    // App Opener Handling
+    // App Opener
     function handleAppAction(actionStr) {
       const act = actionStr.toLowerCase();
       if (act.includes('whatsapp')) {
@@ -216,7 +216,7 @@
       }
     }
 
-    // Conversation & Multi-Model Self-Healing
+    // Conversation Engine
     let conversationHistory = [
       {
         role: "user",
@@ -228,37 +228,50 @@
       }
     ];
 
+    // Auto Model Resolution (आपके अकाउंट का सही वर्किंग मॉडल ढूँढने का फ़ंक्शन)
+    let activeModelName = null;
+
+    async function resolveWorkingModel(apiKey) {
+      if (activeModelName) return activeModelName;
+      try {
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const listData = await listRes.json();
+        if (listData.models && Array.isArray(listData.models)) {
+          const supported = listData.models.find(m => 
+            m.supportedGenerationMethods && 
+            m.supportedGenerationMethods.includes("generateContent") &&
+            (m.name.includes("flash") || m.name.includes("pro"))
+          );
+          if (supported) {
+            activeModelName = supported.name;
+            return activeModelName;
+          }
+        }
+      } catch (e) {
+        console.warn("ListModels fallback:", e);
+      }
+      activeModelName = "models/gemini-2.5-flash";
+      return activeModelName;
+    }
+
     async function callGemini(contents) {
       const apiKey = getApiKey();
-      // v1 और v1beta के सारे वर्किंग एंडपॉइंट्स की लिस्ट
-      const endpoints = [
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
-        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`
-      ];
+      const model = await resolveWorkingModel(apiKey);
+      const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
 
-      let lastError = "";
-      for (const url of endpoints) {
-        try {
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: contents })
-          });
-          const data = await res.json();
-          if (data.error) {
-            lastError = data.error.message;
-            continue;
-          }
-          if (data.candidates && data.candidates[0].content) {
-            return data.candidates[0].content.parts[0].text;
-          }
-        } catch(e) {
-          lastError = e.message;
-        }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: contents })
+      });
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error.message);
       }
-      throw new Error(lastError || "कनेक्शन नहीं बन सका");
+      if (data.candidates && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+      }
+      throw new Error("कोई जवाब नहीं मिला");
     }
 
     async function sendToLia(userMessage) {
@@ -272,13 +285,11 @@
         document.getElementById('lia-speech').innerText = reply.replace(/\[(BUILD\vert{}APP):.*?\]/g, '');
         speakText(reply);
 
-        // App Trigger
         const appMatch = reply.match(/\[APP:\s*(.*?)\]/);
         if (appMatch) {
           setTimeout(() => handleAppAction(appMatch[1]), 1200);
         }
 
-        // Website Forge Trigger
         const buildMatch = reply.match(/\[BUILD:\s*(.*?)\]/);
         if (buildMatch) {
           forgeWebsite(buildMatch[1]);
@@ -286,8 +297,8 @@
           document.getElementById('lia-status').innerText = "ऑनलाइन • सुन रही हूँ";
         }
       } catch (err) {
-        document.getElementById('lia-speech').innerText = "माफ़ करना जानू! API से जवाब नहीं आ सका: " + err.message;
-        speakText("API में दिक्कत आ गई जानू, एक बार चेक कर लीजिए।");
+        document.getElementById('lia-speech').innerText = "त्रुटि: " + err.message;
+        speakText("API में कुछ दिक्कत है जानू, कृपया चेक करिए।");
       }
     }
 
@@ -295,7 +306,7 @@
       document.getElementById('lia-status').innerText = "🛠️ LIA वेबसाइट बना रही है...";
       if (liaOrb) liaOrb.material.color.setHex(0x00ff88);
 
-      const sysCodePrompt = `Build a complete, animated single-file website with Tailwind CDN & GSAP for: "${prompt}". Return ONLY HTML starting with <!DOCTYPE html>.`;
+      const sysCodePrompt = `Build a complete single-file HTML website with Tailwind CDN & GSAP animations for: "${prompt}". Return ONLY valid HTML starting with <!DOCTYPE html>. Use real picsum.photos images.`;
       try {
         const html = await callGemini([{ parts: [{ text: sysCodePrompt }] }]);
         const clean = html.replace(/```html/g, '').replace(/```/g, '').trim();
@@ -307,14 +318,14 @@
         document.getElementById('lia-speech').innerText = "लीजिए जानू! आपकी वेबसाइट तैयार है ❤️";
         speakText("लीजिए जानू, आपकी वेबसाइट तैयार है!");
       } catch(e) {
-        document.getElementById('lia-speech').innerText = "वेबसाइट नहीं बन सकी जानू: " + e.message;
+        document.getElementById('lia-speech').innerText = "वेबसाइट नहीं बन सकी: " + e.message;
       }
     }
 
     function closeWebsite() {
       document.getElementById('result-frame').style.display = 'none';
       document.getElementById('close-web-btn').classList.add('hidden');
-      document.getElementById('lia-speech').innerText = "वेबसाइट बंद कर दी। अब बताइए, क्या करना है?";
+      document.getElementById('lia-speech').innerText = "वेबसाइट बंद कर दी। अब बताइए?";
       speakText("वेबसाइट बंद कर दी।");
     }
 
@@ -323,6 +334,7 @@
       const k = document.getElementById('api-key-input').value.trim();
       if (k) {
         localStorage.setItem('lia_gemini_key', k);
+        activeModelName = null; // Reset cached model
         toggleKeyModal();
         alert("API Key सेव हो गई!");
         toggleListening();
