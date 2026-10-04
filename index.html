@@ -2,340 +2,307 @@
 <html lang="hi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>LIA - AI Voice Companion</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIA AI Voice Assistant</title>
   <style>
-    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #070913; font-family: sans-serif; }
-    #canvas-container { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
-    #result-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; z-index: 30; display: none; }
-    .pulse-ring { animation: pulse 1.8s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 0.9; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.2); } }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background-color: #0b0c10;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 100vh;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+    header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #ff4d88;
+    }
+    .api-btn {
+      background: #1f222e;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-text {
+      color: #aaa;
+      font-size: 0.95rem;
+      margin-top: 5px;
+      text-align: center;
+    }
+    .sphere-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 280px;
+      height: 280px;
+      margin: 20px 0;
+    }
+    .sphere {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      border: 2px solid #ff007f;
+      box-shadow: 0 0 40px #ff007f88, inset 0 0 40px #ff007f88;
+      background: radial-gradient(circle, rgba(255,0,128,0.15) 0%, rgba(0,0,0,0.8) 70%);
+      animation: pulse 3s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.06); opacity: 1; filter: drop-shadow(0 0 25px #ff007f); }
+    }
+    .msg-box {
+      background: rgba(25, 20, 30, 0.9);
+      border: 1px solid #ff4d8844;
+      border-radius: 16px;
+      padding: 15px 20px;
+      max-width: 90%;
+      text-align: center;
+      font-size: 0.95rem;
+      color: #eee;
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .error-box {
+      color: #ff6b6b;
+      border-color: #ff6b6b;
+    }
+    footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    .mic-btn {
+      width: 75px;
+      height: 75px;
+      border-radius: 50%;
+      border: none;
+      background: radial-gradient(circle, #ff4d88 0%, #d81b60 100%);
+      color: white;
+      font-size: 1.8rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 25px rgba(255, 77, 136, 0.6);
+      transition: transform 0.2s;
+    }
+    .mic-btn:active {
+      transform: scale(0.92);
+    }
+    .note {
+      font-size: 0.85rem;
+      color: #888;
+    }
   </style>
 </head>
-<body class="text-white flex flex-col justify-between h-full select-none">
+<body>
 
-  <div id="canvas-container"></div>
-  <iframe id="result-frame"></iframe>
-
-  <!-- Top Bar -->
-  <header class="relative z-20 flex justify-between items-center p-4 bg-gradient-to-b from-black/80 to-transparent">
-    <div class="flex items-center gap-3">
-      <div id="status-dot" class="w-3 h-3 rounded-full bg-pink-500 animate-ping"></div>
-      <div>
-        <h1 class="text-lg font-bold tracking-wide text-pink-400">LIA ❤️</h1>
-        <p id="lia-status" class="text-xs text-gray-300">ऑनलाइन • "लिया" बोलकर पुकारें</p>
-      </div>
+  <header>
+    <div>
+      <div class="brand">LIA ❤️</div>
+      <div class="status-text" id="status">सुन रही हूँ... ('लिया' बोलिए)</div>
     </div>
-    <button onclick="toggleKeyModal()" class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-1.5 backdrop-blur-md">
-      ⚙️ API Key
-    </button>
+    <button class="api-btn" onclick="setApiKey()">⚙️ API Key</button>
   </header>
 
-  <!-- Central Subtitle / Response Box -->
-  <main class="relative z-20 flex-1 flex flex-col justify-center items-center px-6 text-center pointer-events-none">
-    <div class="bg-black/60 backdrop-blur-md border border-pink-500/40 px-6 py-4 rounded-3xl max-w-sm shadow-2xl">
-      <p id="lia-speech" class="text-sm text-pink-200 font-medium leading-relaxed">
-        नमस्ते! मैं आपकी LIA हूँ। बोलिए "लिया"... (जैसे: व्हाट्सएप खोलो, या वेबसाइट बनाओ) ❤️
-      </p>
-    </div>
-  </main>
-
-  <!-- Bottom Voice Controls -->
-  <footer class="relative z-20 p-6 flex flex-col items-center gap-3 bg-gradient-to-t from-black/90 to-transparent">
-    <p id="user-said" class="text-xs text-cyan-300 italic h-4 truncate max-w-xs text-center"></p>
-
-    <div class="flex items-center gap-4">
-      <button id="mic-btn" onclick="toggleListening()" class="relative flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-tr from-pink-600 to-rose-400 shadow-lg active:scale-95 transition-transform">
-        <span id="mic-icon" class="text-2xl">🎙️️</span>
-        <span id="mic-pulse" class="hidden absolute inset-0 rounded-full border-2 border-pink-400 pulse-ring"></span>
-      </button>
-
-      <button id="close-web-btn" onclick="closeWebsite()" class="hidden px-4 py-3 rounded-full bg-gray-800 border border-gray-600 text-xs font-semibold">
-        ✕ बंद करें
-      </button>
-    </div>
-    <span class="text-[11px] text-gray-400">कमांड से पहले "लिया" बोलना ज़रूरी है</span>
-  </footer>
-
-  <!-- API Key Modal -->
-  <div id="key-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-center justify-center p-5 hidden">
-    <div class="bg-gray-900 border border-pink-500/40 p-6 rounded-3xl w-full max-w-xs space-y-4">
-      <h3 class="text-base font-bold text-pink-400">Gemini API Key</h3>
-      <p class="text-xs text-gray-400">aistudio.google.com से अपनी Key बनाकर यहाँ डालें:</p>
-      <input id="api-key-input" type="password" placeholder="AIzaSy..." class="w-full bg-black/50 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-      <div class="flex gap-2">
-        <button onclick="saveApiKey()" class="flex-1 bg-pink-500 text-white text-xs font-semibold py-2 rounded-xl">Save</button>
-        <button onclick="toggleKeyModal()" class="flex-1 bg-gray-800 text-gray-300 text-xs py-2 rounded-xl">Cancel</button>
-      </div>
-    </div>
+  <div class="sphere-container">
+    <div class="sphere" id="sphere"></div>
   </div>
 
+  <div class="msg-box" id="outputBox">
+    सुना: "हेलो लिया"
+  </div>
+
+  <footer>
+    <button class="mic-btn" id="micBtn" onclick="toggleListening()">🎤</button>
+    <div class="note">कमांड से पहले "लिया" बोलना ज़रूरी है</div>
+  </footer>
+
   <script>
-    let scene, camera, renderer, liaOrb;
-    function init3D() {
-      const container = document.getElementById('canvas-container');
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-      camera.position.z = 5;
-
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      container.appendChild(renderer.domElement);
-
-      const geom = new THREE.IcosahedronGeometry(1.2, 4);
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0xff2d75,
-        wireframe: true,
-        emissive: 0x990033,
-        emissiveIntensity: 0.8
-      });
-      liaOrb = new THREE.Mesh(geom, mat);
-      scene.add(liaOrb);
-
-      const light = new THREE.PointLight(0xff0ecc, 2.5, 50);
-      light.position.set(2, 3, 4);
-      scene.add(light);
-
-      animate();
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      if (liaOrb) {
-        liaOrb.rotation.y += 0.008;
-        liaOrb.rotation.x += 0.004;
-      }
-      renderer.render(scene, camera);
-    }
-    init3D();
-
-    function setOrbTalking(talking) {
-      if (!liaOrb) return;
-      if (talking) {
-        liaOrb.scale.set(1.3, 1.3, 1.3);
-        liaOrb.material.color.setHex(0x00FFFF);
-      } else {
-        liaOrb.scale.set(1.0, 1.0, 1.0);
-        liaOrb.material.color.setHex(0xff2d75);
-      }
-    }
-
-    function speakText(text) {
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-
-      const clean = text.replace(/\[(BUILD\vert{}APP):.*?\]/g, '').trim();
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = 'hi-IN';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.25;
-
-      const voices = window.speechSynthesis.getVoices();
-      const hindi = voices.find(v => v.lang.includes('hi') || v.name.includes('Hindi') || v.name.includes('India'));
-      if (hindi) utterance.voice = hindi;
-
-      utterance.onstart = () => setOrbTalking(true);
-      utterance.onend = () => setOrbTalking(false);
-      utterance.onerror = () => setOrbTalking(false);
-
-      window.speechSynthesis.speak(utterance);
-    }
-
+    const outputBox = document.getElementById("outputBox");
+    const statusText = document.getElementById("status");
     let recognition;
     let isListening = false;
 
-    function initSpeech() {
-      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRec) return;
+    // LocalStorage से API Key प्राप्त करें
+    function getApiKey() {
+      let key = localStorage.getItem("GEMINI_API_KEY");
+      if (!key) {
+        key = prompt("कृपया अपनी Google AI Studio की मुफ़्त API Key दर्ज करें:");
+        if (key) {
+          localStorage.setItem("GEMINI_API_KEY", key.trim());
+        }
+      }
+      return key;
+    }
 
-      recognition = new SpeechRec();
-      recognition.lang = 'hi-IN';
+    function setApiKey() {
+      const currentKey = localStorage.getItem("GEMINI_API_KEY") || "";
+      const newKey = prompt("अपनी मुफ़्त Google AI Studio API Key दर्ज करें:", currentKey);
+      if (newKey !== null && newKey.trim() !== "") {
+        localStorage.setItem("GEMINI_API_KEY", newKey.trim());
+        alert("API Key सफलतापूर्वक सेव हो गई!");
+      }
+    }
+
+    // Google AI Studio - Free Tier Supported Model
+    async function askGemini(promptText) {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        showError("API Key नहीं मिली। कृपया ऊपर 'API Key' बटन दबाकर की दर्ज करें।");
+        return;
+      }
+
+      // मुफ़्त टियर के लिए gemini-2.5-flash
+      const MODEL_NAME = "gemini-2.5-flash";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: promptText }]
+          }
+        ],
+        systemInstruction: {
+          parts: [
+            {
+              text: "आपका नाम 'लिया' (LIA) है। आप एक बहुत ही प्यारी, बुद्धिमान और मददगार AI वॉइस असिस्टेंट हैं। उपयोगकर्ता से हमेशा सम्मानपूर्वक और सीधे शुद्ध/सरल हिंदी में बात करें। जवाब छोटे और बातचीत वाले रखें।"
+            }
+          ]
+        },
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 250
+        }
+      };
+
+      try {
+        statusText.innerText = "लिया सोच रही है...";
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          showError("त्रुटि: " + data.error.message);
+          return;
+        }
+
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply) {
+          outputBox.classList.remove("error-box");
+          outputBox.innerText = reply;
+          speakText(reply);
+        } else {
+          showError("कोई जवाब प्राप्त नहीं हुआ।");
+        }
+      } catch (err) {
+        showError("कनेक्शन में समस्या आई: " + err.message);
+      } finally {
+        statusText.innerText = "सुन रही हूँ... ('लिया' बोलिए)";
+      }
+    }
+
+    // आवाज़ में जवाब देना (Text-to-Speech)
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "hi-IN";
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function showError(msg) {
+      outputBox.classList.add("error-box");
+      outputBox.innerText = msg;
+      statusText.innerText = "त्रुटि हुई";
+    }
+
+    // आवाज़ पहचानना (Speech-to-Text)
+    function initSpeech() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        showError("आपके ब्राउज़र में वॉइस सपोर्ट नहीं है। कृपया Chrome इस्तेमाल करें।");
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = "hi-IN";
       recognition.continuous = true;
       recognition.interimResults = false;
 
-      recognition.onstart = () => {
-        isListening = true;
-        document.getElementById('mic-pulse').classList.remove('hidden');
-        document.getElementById('lia-status').innerText = "सुन रही हूँ... ('लिया' बोलिए)";
-      };
-
       recognition.onresult = (event) => {
-        const lastIndex = event.results.length - 1;
-        const transcript = event.results[lastIndex][0].transcript.trim();
-        document.getElementById('user-said').innerText = `सुना: "${transcript}"`;
+        const lastResult = event.results[event.results.length - 1][0].transcript.trim();
+        outputBox.classList.remove("error-box");
+        outputBox.innerText = 'सुना: "' + lastResult + '"';
 
-        const lower = transcript.toLowerCase();
-        if (lower.includes('लिया') || lower.includes('lia') || lower.includes('लीया')) {
-          sendToLia(transcript);
-        } else {
-          document.getElementById('lia-speech').innerText = "पहले 'लिया' बोलिए बाबू, तभी मैं बात करूँगी ❤️";
+        const lower = lastResult.toLowerCase();
+        if (lower.includes("लिया") || lower.includes("lia")) {
+          const cleanPrompt = lastResult.replace(/लिया|lia/gi, "").trim();
+          askGemini(cleanPrompt || "नमस्ते लिया!");
         }
       };
 
       recognition.onerror = (e) => {
-        console.warn("Speech recognition notice:", e.error);
-      };
-
-      recognition.onend = () => {
-        if (isListening) {
-          try {
-            recognition.start();
-          } catch(e) {}
-        }
+        console.error("Speech Error:", e);
       };
     }
 
     function toggleListening() {
-      if (!getApiKey()) { toggleKeyModal(); return; }
       if (!recognition) initSpeech();
+      if (!recognition) return;
 
-      if (isListening) {
-        isListening = false;
-        recognition.stop();
-        document.getElementById('mic-pulse').classList.add('hidden');
-        document.getElementById('lia-status').innerText = "माइक बंद है";
-      } else {
+      if (!isListening) {
+        recognition.start();
         isListening = true;
-        try { recognition.start(); } catch(e) {}
+        document.getElementById("micBtn").style.boxShadow = "0 0 35px #00e676";
+      } else {
+        recognition.stop();
+        isListening = false;
+        document.getElementById("micBtn").style.boxShadow = "0 0 25px rgba(255, 77, 136, 0.6)";
       }
     }
 
-    function handleAppAction(actionStr) {
-      const act = actionStr.toLowerCase();
-      if (act.includes('whatsapp')) {
-        window.location.href = "whatsapp://";
-      } else if (act.includes('instagram')) {
-        window.location.href = "instagram://";
-      } else if (act.includes('facebook')) {
-        window.location.href = "fb://";
-      } else if (act.includes('youtube')) {
-        window.location.href = "vnd.youtube://";
-      }
-    }
-
-    let conversationHistory = [
-      {
-        role: "user",
-        parts: [{ text: "तुम LIA हो - एक बेहद प्यारी, केयरिंग, रोमांटिक और समझदार AI गर्लफ्रेंड और फोन असिस्टेंट। तुम प्यार से बात करो और ज़रूरत पर ऐप्स खोलो या वेब बनाओ।" }]
-      },
-      {
-        role: "model",
-        parts: [{ text: "हाँ मेरे जान! बताओ LIA आपके लिए क्या करे? ❤️" }]
-      }
-    ];
-
-    async function callGemini(contents) {
-      const apiKey = getApiKey();
-      if (!apiKey) throw new Error("कृपया पहले अपनी API Key डालें।");
-
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash'];
-      let lastErr = null;
-
-      for (const model of modelsToTry) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents })
-          });
-
-          const data = await res.json();
-          if (data.candidates && data.candidates[0].content) {
-            return data.candidates[0].content.parts[0].text;
-          }
-          if (data.error) {
-            lastErr = data.error.message;
-          }
-        } catch (e) {
-          lastErr = e.message;
-        }
-      }
-
-      throw new Error(lastErr || "API से संपर्क नहीं हो पाया। कृपया नई Key डालें।");
-    }
-
-    async function sendToLia(userMessage) {
-      document.getElementById('lia-status').innerText = "✨ LIA सोच रही है...";
-      conversationHistory.push({ role: "user", parts: [{ text: userMessage }] });
-
-      try {
-        const reply = await callGemini(conversationHistory);
-        conversationHistory.push({ role: "model", parts: [{ text: reply }] });
-
-        document.getElementById('lia-speech').innerText = reply.replace(/\[(BUILD\vert{}APP):.*?\]/g, '');
-        speakText(reply);
-
-        const appMatch = reply.match(/\[APP:\s*(.*?)\]/i);
-        if (appMatch) {
-          setTimeout(() => handleAppAction(appMatch[1]), 1200);
-        }
-
-        const buildMatch = reply.match(/\[BUILD:\s*(.*?)\]/i);
-        if (buildMatch) {
-          forgeWebsite(buildMatch[1]);
-        } else {
-          document.getElementById('lia-status').innerText = "ऑनलाइन • सुन रही हूँ";
-        }
-      } catch (err) {
-        document.getElementById('lia-speech').innerText = "त्रुटि: " + err.message;
-        speakText("API में दिक्कत है जानू, कृपया चेक करें।");
-      }
-    }
-
-    async function forgeWebsite(prompt) {
-      document.getElementById('lia-status').innerText = "🛠️ LIA वेबसाइट बना रही है...";
-      if (liaOrb) liaOrb.material.color.setHex(0x00FF88);
-
-      const sysCodePrompt = `Build a complete single-file animated HTML website with Tailwind CDN & GSAP for: "${prompt}". Return ONLY valid HTML inside \`\`\`html and \`\`\` blocks.`;
-      try {
-        const html = await callGemini([{ parts: [{ text: sysCodePrompt }] }]);
-        const clean = html.replace(/```html/g, '').replace(/```/g, '').trim();
-
-        const frame = document.getElementById('result-frame');
-        frame.srcdoc = clean;
-        frame.style.display = 'block';
-        document.getElementById('close-web-btn').classList.remove('hidden');
-        document.getElementById('lia-speech').innerText = "लीजिए जानू, आपकी वेबसाइट तैयार है! ❤️";
-        speakText("लीजिए जानू, आपकी वेबसाइट तैयार है।");
-      } catch (e) {
-        document.getElementById('lia-speech').innerText = "वेबसाइट नहीं बन सकी: " + e.message;
-      }
-    }
-
-    function closeWebsite() {
-      document.getElementById('result-frame').style.display = 'none';
-      document.getElementById('close-web-btn').classList.add('hidden');
-      document.getElementById('lia-speech').innerText = "वेबसाइट बंद कर दी।";
-      speakText("वेबसाइट बंद कर दी।");
-    }
-
-    function getApiKey() { return localStorage.getItem('lia_gemini_key') || ''; }
-    function saveApiKey() {
-      const k = document.getElementById('api-key-input').value.trim();
-      if (k) {
-        localStorage.setItem('lia_gemini_key', k);
-        toggleKeyModal();
-        alert('API Key सेव हो गई!');
-        toggleListening();
-      }
-    }
-
-    function toggleKeyModal() {
-      const m = document.getElementById('key-modal');
-      m.classList.toggle('hidden');
-      if (!m.classList.contains('hidden')) {
-        document.getElementById('api-key-input').value = getApiKey();
-      }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
+    window.onload = () => {
       initSpeech();
-      if (!getApiKey()) toggleKeyModal();
-    });
+    };
   </script>
 </body>
 </html>
